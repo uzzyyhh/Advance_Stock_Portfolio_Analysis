@@ -26,7 +26,7 @@ num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 
 st.sidebar.image(
     "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif", 
     caption="Simulating portfolio optimization...",
-    width=200  
+    width=300, height=200
 )
 
 # Load data

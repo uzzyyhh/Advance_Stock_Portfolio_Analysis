@@ -23,12 +23,16 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 st.sidebar.header("Portfolio Settings")
 num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 1000, step=500)
 
-st.sidebar.image(
-    "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif", 
-    caption="Simulating portfolio optimization...",
-    width=300, height=200
-)
+gif_url = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif"  L
 
+st.sidebar.markdown(
+    f"""
+    <div style="display: flex; justify-content: center;">
+        <img src="https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif" style="width:100%; max-width:100%; height:auto;">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # Load data
 @st.cache_data
 def load_data():

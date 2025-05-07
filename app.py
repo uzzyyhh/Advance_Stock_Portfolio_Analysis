@@ -23,7 +23,7 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 st.sidebar.header("Portfolio Settings")
 num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 1000, step=500)
 
-gif_url = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif"  L
+gif_url = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif" 
 
 st.sidebar.markdown(
     f"""

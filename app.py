@@ -23,7 +23,7 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 st.sidebar.header("Portfolio Settings")
 num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 1000, step=500)
 # Add a relevant GIF under the slider
-st.sidebar.image("https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExb3FkOXFnMTc1dXhia21pdWFwM2V0aDVnaHp0YXFvOGJsMzF6cnV3NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Fbne9TEgYmQ9tjmEr3/giphy.gif", 
+st.sidebar.image("https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif", 
                  caption="Simulating portfolio optimization...", 
                  use_container_width=True)
 

@@ -22,16 +22,17 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 # Sidebar for portfolio simulation
 st.sidebar.header("Portfolio Settings")
 num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 1000, step=500)
-# Add a relevant GIF under the slider
-st.sidebar.image("https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif", 
-                 caption="Simulating portfolio optimization...", 
-                 use_container_width=True)
+
+st.sidebar.image(
+    "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeD...", 
+    caption="Simulating portfolio optimization...",
+    width=200  
+)
 
 # Load data
 @st.cache_data
 def load_data():
     data = pd.read_excel("final_fda_pro.xlsx")
-    # No need to convert 'Date' as it's already in datetime64[ns] format
     return data.dropna()
 
 data = load_data()

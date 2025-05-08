@@ -71,15 +71,13 @@ def calculate_stats(returns):
         trading_days = 252
         mean_returns = returns[stocks].mean() * trading_days * 100  # Annualized return (%)
         cov_matrix = returns[stocks].cov() * trading_days * 100  # Annualized covariance
-        # Ensure covariance matrix is positive semi-definite
-        cov_matrix += np.eye(len(stocks)) * 1e-6
-        std_devs = np.sqrt(np.diag(cov_matrix))  # Annualized standard deviation
-        return mean_returns, cov_matrix, std_devs
+        cov_matrix += np.eye(len(stocks)) * 1e-6  # Ensure positive semi-definite
+        return mean_returns, cov_matrix
     except Exception as e:
         st.error(f"Error calculating statistics: {e}")
-        return None, None, None
+        return None, None
 
-mean_returns, cov_matrix, std_devs = calculate_stats(returns)
+mean_returns, cov_matrix = calculate_stats(returns)
 if mean_returns is None:
     st.stop()
 
@@ -154,10 +152,7 @@ def optimize_portfolio(mean_returns, cov_matrix, risk_free_rate):
 
 portfolio_data = optimize_portfolio(mean_returns, cov_matrix, risk_free_rate)
 
-# Debug portfolio data
-st.write("Portfolio Data (Debug):", portfolio_data)
-
-# Calculate cumulative returns (scaled to annualized perspective)
+# Calculate cumulative returns
 @st.cache_data
 def calculate_cumulative_returns(returns, stocks, optimal_weights):
     try:
@@ -166,7 +161,6 @@ def calculate_cumulative_returns(returns, stocks, optimal_weights):
             'Equal': (returns[stocks].mean(axis=1) + 1).cumprod() * 100,
             'Optimal': (returns[stocks].mul(optimal_weights, axis=1).sum(axis=1) + 1).cumprod() * 100
         })
-        # Ensure numeric data
         cumulative_returns['Equal'] = pd.to_numeric(cumulative_returns['Equal'], errors='coerce')
         cumulative_returns['Optimal'] = pd.to_numeric(cumulative_returns['Optimal'], errors='coerce')
         cumulative_returns = cumulative_returns.dropna()
@@ -179,9 +173,6 @@ cumulative_returns = calculate_cumulative_returns(returns, stocks, portfolio_dat
 if cumulative_returns.empty:
     st.error("Cumulative returns data is empty.")
     st.stop()
-
-# Debug cumulative returns
-st.write("Cumulative Returns (Debug):", cumulative_returns.head())
 
 # Page: Price Trends
 if page == "Price Trends":

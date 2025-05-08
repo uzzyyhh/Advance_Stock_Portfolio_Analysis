@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from scipy.optimize import minimize
 
 # Streamlit page configuration
 st.set_page_config(page_title="Stock Portfolio Analysis", layout="wide")
@@ -13,16 +12,11 @@ st.title("Stock Portfolio Analysis")
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
-page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation", "Portfolio"])
+page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation", "Efficient Frontier", "Portfolio"])
 
 # Sidebar for portfolio settings
 st.sidebar.header("Portfolio Settings")
-risk_free_rate = st.sidebar.slider("Risk-Free Rate (%)", 5.0, 15.0, 12.01, step=0.01)
-st.sidebar.markdown(
-    """
-    **Optimization Method**: Mean-variance optimization maximizing the Sharpe Ratio, with constraints for full allocation and non-negative weights (no short-selling).
-    """
-)
+num_portfolios = st.sidebar.slider("Number of Portfolios to Simulate", 1000, 10000, 5000, step=1000)
 st.sidebar.markdown(
     """
     <div style="display: flex; justify-content: center;">
@@ -35,201 +29,201 @@ st.sidebar.markdown(
 # Load data
 @st.cache_data
 def load_data():
-    try:
-        data = pd.read_excel("final_fda_pro.xlsx")
-        return data.dropna()
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
+    data = pd.read_excel("final_fda_pro.xlsx")
+    return data.dropna()
 
 data = load_data()
-if data is None:
-    st.stop()
-
 stocks = ['CNERGY.KA', 'SNGP.KA', 'PAEL.KA', 'POWER.KA', 'WTL.KA']
-sectors = ['Energy', 'Utilities', 'Industrials', 'Construction Materials', 'Telecommunications']
 
 # Calculate daily returns
 @st.cache_data
 def calculate_returns(data):
-    try:
-        returns = data[stocks].pct_change().dropna()
-        returns['Date'] = data['Date'][1:].values
-        return returns
-    except Exception as e:
-        st.error(f"Error calculating returns: {e}")
-        return None
+    returns = data[stocks].pct_change().dropna()
+    returns['Date'] = data['Date'][1:].values
+    return returns
 
 returns = calculate_returns(data)
-if returns is None:
-    st.stop()
 
-# Calculate statistics (annualized)
+# Calculate statistics
 @st.cache_data
 def calculate_stats(returns):
-    try:
-        trading_days = 252
-        mean_returns = returns[stocks].mean() * trading_days * 100  # Annualized return (%)
-        cov_matrix = returns[stocks].cov() * trading_days * 100  # Annualized covariance
-        cov_matrix += np.eye(len(stocks)) * 1e-6  # Ensure positive semi-definite
-        return mean_returns, cov_matrix
-    except Exception as e:
-        st.error(f"Error calculating statistics: {e}")
-        return None, None
+    mean_returns = returns[stocks].mean()
+    cov_matrix = returns[stocks].cov()
+    return mean_returns, cov_matrix
 
 mean_returns, cov_matrix = calculate_stats(returns)
-if mean_returns is None:
-    st.stop()
 
-# Portfolio optimization using mean-variance optimization
+# Monte Carlo simulation for portfolio optimization
 @st.cache_data
-def optimize_portfolio(mean_returns, cov_matrix, risk_free_rate):
+def monte_carlo_simulation(mean_returns, cov_matrix, num_portfolios):
     num_stocks = len(stocks)
+    results = np.zeros((3 + num_stocks, num_portfolios))
+    risk_free_rate = 0.1201 / 252  # 12.01% annualized risk-free rate, converted to daily
 
-    # Objective function: Negative Sharpe Ratio (to maximize)
-    def neg_sharpe_ratio(weights, mean_returns, cov_matrix, risk_free_rate):
-        portfolio_return = np.sum(mean_returns * weights)
-        portfolio_risk = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-        if portfolio_risk == 0:
-            return np.inf
-        return -((portfolio_return - risk_free_rate) / portfolio_risk)
+    for i in range(num_portfolios):
+        weights = np.random.random(num_stocks)
+        weights /= np.sum(weights)
+        
+        portfolio_return = np.sum(mean_returns * weights) * 252
+        portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix * 252, weights)))
+        sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_std_dev
+        
+        results[0, i] = portfolio_return
+        results[1, i] = portfolio_std_dev
+        results[2, i] = sharpe_ratio
+        for j in range(num_stocks):
+            results[3 + j, i] = weights[j]
 
-    # Constraints: Weights sum to 1
-    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
-    # Bounds: Non-negative weights (no short-selling)
-    bounds = tuple((0, 1) for _ in range(num_stocks))
-    # Initial guess: Equal weights
-    init_weights = np.array([1/num_stocks] * num_stocks)
+    return results
 
-    # Optimize with error handling
-    try:
-        result = minimize(
-            neg_sharpe_ratio,
-            init_weights,
-            args=(mean_returns, cov_matrix, risk_free_rate),
-            method='SLSQP',
-            bounds=bounds,
-            constraints=constraints,
-            options={'maxiter': 1000, 'ftol': 1e-9}
-        )
-        if not result.success:
-            st.warning("Optimization failed, using equal weights as fallback.")
-            optimal_weights = init_weights
-        else:
-            optimal_weights = result.x
-    except Exception as e:
-        st.error(f"Optimization error: {e}")
-        optimal_weights = init_weights
+results = monte_carlo_simulation(mean_returns, cov_matrix, num_portfolios)
 
-    # Compute metrics for optimal portfolio
-    optimal_return = np.sum(mean_returns * optimal_weights)
-    optimal_risk = np.sqrt(np.dot(optimal_weights.T, np.dot(cov_matrix, optimal_weights)))
-    optimal_sharpe = (optimal_return - risk_free_rate) / optimal_risk if optimal_risk != 0 else 0
+# Find portfolios with max Sharpe ratio and min volatility
+max_sharpe_idx = np.argmax(results[2])
+min_vol_idx = np.argmin(results[1])
 
-    # Equal-weight portfolio (initial portfolio)
-    equal_weights = np.array([1/num_stocks] * num_stocks)
-    equal_return = np.sum(mean_returns * equal_weights)
-    equal_risk = np.sqrt(np.dot(equal_weights.T, np.dot(cov_matrix, equal_weights)))
-    equal_sharpe = (equal_return - risk_free_rate) / equal_risk if equal_risk != 0 else 0
+max_sharpe_portfolio = {
+    'return': results[0, max_sharpe_idx] * 100,
+    'risk': results[1, max_sharpe_idx] * 100,
+    'sharpe': results[2, max_sharpe_idx],
+    'weights': results[3:, max_sharpe_idx]
+}
 
-    # Validate metrics
-    portfolio_data = {
-        'optimal': {
-            'weights': optimal_weights,
-            'return': optimal_return if not np.isnan(optimal_return) else 0,
-            'risk': optimal_risk if not np.isnan(optimal_risk) else 0,
-            'sharpe': optimal_sharpe if not np.isnan(optimal_sharpe) else 0
-        },
-        'equal': {
-            'weights': equal_weights,
-            'return': equal_return if not np.isnan(equal_return) else 0,
-            'risk': equal_risk if not np.isnan(equal_risk) else 0,
-            'sharpe': equal_sharpe if not np.isnan(equal_sharpe) else 0
-        }
-    }
-
-    return portfolio_data
-
-portfolio_data = optimize_portfolio(mean_returns, cov_matrix, risk_free_rate)
+min_vol_portfolio = {
+    'return': results[0, min_vol_idx] * 100,
+    'risk': results[1, min_vol_idx] * 100,
+    'sharpe': results[2, min_vol_idx],
+    'weights': results[3:, min_vol_idx]
+}
 
 # Calculate cumulative returns
-@st.cache_data
-def calculate_cumulative_returns(returns, stocks, optimal_weights):
-    try:
-        cumulative_returns = pd.DataFrame({
-            'Date': returns['Date'],
-            'Equal': (returns[stocks].mean(axis=1) + 1).cumprod() * 100,
-            'Optimal': (returns[stocks].mul(optimal_weights, axis=1).sum(axis=1) + 1).cumprod() * 100
-        })
-        cumulative_returns['Equal'] = pd.to_numeric(cumulative_returns['Equal'], errors='coerce')
-        cumulative_returns['Optimal'] = pd.to_numeric(cumulative_returns['Optimal'], errors='coerce')
-        cumulative_returns = cumulative_returns.dropna()
-        return cumulative_returns
-    except Exception as e:
-        st.error(f"Error calculating cumulative returns: {e}")
-        return pd.DataFrame({'Date': [], 'Equal': [], 'Optimal': []})
+cumulative_returns = pd.DataFrame({
+    'Date': returns['Date'],
+    'Min Volatility': (returns[stocks].mul(min_vol_portfolio['weights'], axis=1).sum(axis=1) + 1).cumprod() - 1,
+    'Max Sharpe': (returns[stocks].mul(max_sharpe_portfolio['weights'], axis=1).sum(axis=1) + 1).cumprod() - 1
+})
 
-cumulative_returns = calculate_cumulative_returns(returns, stocks, portfolio_data['optimal']['weights'])
-if cumulative_returns.empty:
-    st.error("Cumulative returns data is empty.")
-    st.stop()
+# Calculate annualized returns for individual stocks
+annualized_returns = mean_returns * 252 * 100  # Annualized return (%)
 
 # Page: Price Trends
 if page == "Price Trends":
     st.header("Stock Price Trends")
     selected_stock = st.selectbox("Select Stock", stocks)
-    try:
-        fig = px.line(data, x='Date', y=selected_stock, title=f'{selected_stock} Price Trend',
-                      color_discrete_sequence=['#FF6B6B'])
-        fig.update_layout(xaxis_title="Date", yaxis_title="Price", template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Error rendering Price Trends chart: {e}")
+    fig = px.line(data, x='Date', y=selected_stock, title=f'{selected_stock} Price Trend',
+                  color_discrete_sequence=['#FF6B6B'])
+    fig.update_layout(xaxis_title="Date", yaxis_title="Price", template="plotly_white")
+    st.plotly_chart(fig, use_container_width=True)
 
 # Page: Returns
 if page == "Returns":
     st.header("Stock Returns")
     selected_stock = st.selectbox("Select Stock", stocks)
+    
+    # Option to select return type
+    return_type = st.radio("Select Return Type", ["Daily Returns", "Annualized Returns", "Cumulative Returns"])
+    
     col1, col2 = st.columns(2)
+    
     with col1:
-        st.subheader("Returns Over Time")
-        try:
+        st.subheader(f"{return_type} Over Time")
+        if return_type == "Daily Returns":
             fig = px.line(returns, x='Date', y=selected_stock, title=f'{selected_stock} Daily Returns',
                           color_discrete_sequence=['#4ECDC4'])
             fig.update_layout(xaxis_title="Date", yaxis_title="Daily Return", template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Returns Over Time chart: {e}")
+        elif return_type == "Annualized Returns":
+            annualized_df = pd.DataFrame({
+                'Date': returns['Date'],
+                selected_stock: returns[selected_stock] * 252  # Scale daily returns to annualized
+            })
+            fig = px.line(annualized_df, x='Date', y=selected_stock, title=f'{selected_stock} Annualized Returns (Scaled Daily)',
+                          color_discrete_sequence=['#4ECDC4'])
+            fig.update_layout(xaxis_title="Date", yaxis_title="Annualized Return", template="plotly_white")
+        else:  # Cumulative Returns
+            cumulative_stock = (returns[selected_stock] + 1).cumprod() - 1
+            cumulative_df = pd.DataFrame({
+                'Date': returns['Date'],
+                selected_stock: cumulative_stock * 100
+            })
+            fig = px.line(cumulative_df, x='Date', y=selected_stock, title=f'{selected_stock} Cumulative Returns',
+                          color_discrete_sequence=['#4ECDC4'])
+            fig.update_layout(xaxis_title="Date", yaxis_title="Cumulative Return (%)", template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
+    
     with col2:
-        st.subheader("Returns Distribution")
-        try:
-            fig = px.histogram(returns, x=selected_stock, nbins=50, title=f'{selected_stock} Returns Distribution',
+        st.subheader(f"{return_type} Distribution")
+        if return_type == "Daily Returns":
+            fig = px.histogram(returns, x=selected_stock, nbins=50, title=f'{selected_stock} Daily Returns Distribution',
                                color_discrete_sequence=['#FFD93D'])
             fig.update_layout(xaxis_title="Daily Return", yaxis_title="Count", template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Returns Distribution chart: {e}")
+        elif return_type == "Annualized Returns":
+            fig = px.histogram(returns, x=selected_stock, nbins=50, title=f'{selected_stock} Annualized Returns Distribution (Scaled Daily)',
+                               color_discrete_sequence=['#FFD93D'])
+            fig.update_layout(xaxis_title="Annualized Return", yaxis_title="Count", template="plotly_white")
+        else:  # Cumulative Returns
+            cumulative_stock = (returns[selected_stock] + 1).cumprod() - 1
+            cumulative_df = pd.DataFrame({selected_stock: cumulative_stock * 100})
+            fig = px.histogram(cumulative_df, x=selected_stock, nbins=50, title=f'{selected_stock} Cumulative Returns Distribution',
+                               color_discrete_sequence=['#FFD93D'])
+            fig.update_layout(xaxis_title="Cumulative Return (%)", yaxis_title="Count", template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Page: Correlation
 if page == "Correlation":
     st.header("Correlation Matrix")
-    try:
-        corr_matrix = returns[stocks].corr()
-        fig = go.Figure(data=go.Heatmap(
-            z=corr_matrix.values,
-            x=stocks,
-            y=stocks,
-            colorscale='Plasma',
-            zmin=-1,
-            zmax=1,
-            text=corr_matrix.values.round(2),
-            texttemplate="%{text}",
-            textfont={"size": 12, "color": "white"}
-        ))
-        fig.update_layout(title="Correlation Matrix", template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Error rendering Correlation Matrix chart: {e}")
+    corr_matrix = returns[stocks].corr()
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=stocks,
+        y=stocks,
+        colorscale='Plasma',
+        zmin=-1,
+        zmax=1,
+        text=corr_matrix.values.round(2),
+        texttemplate="%{text}",
+        textfont={"size": 12, "color": "white"}
+    ))
+    fig.update_layout(title="Correlation Matrix", template="plotly_white")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Page: Efficient Frontier
+if page == "Efficient Frontier":
+    st.header("Efficient Frontier")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=results[1] * 100,
+        y=results[0] * 100,
+        mode='markers',
+        marker=dict(
+            size=5,
+            color=results[2],
+            colorscale='Viridis',
+            showscale=True,
+            colorbar=dict(title="Sharpe Ratio")
+        ),
+        name='Portfolios'
+    ))
+    fig.add_trace(go.Scatter(
+        x=[min_vol_portfolio['risk']],
+        y=[min_vol_portfolio['return']],
+        mode='markers',
+        marker=dict(size=12, color='red', symbol='star'),
+        name='Min Volatility'
+    ))
+    fig.add_trace(go.Scatter(
+        x=[max_sharpe_portfolio['risk']],
+        y=[max_sharpe_portfolio['return']],
+        mode='markers',
+        marker=dict(size=12, color='green', symbol='star'),
+        name='Max Sharpe'
+    ))
+    fig.update_layout(
+        title="Efficient Frontier",
+        xaxis_title="Risk (%)",
+        yaxis_title="Return (%)",
+        template="plotly_white"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # Page: Portfolio
 if page == "Portfolio":
@@ -237,90 +231,50 @@ if page == "Portfolio":
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Sector Allocation")
-        try:
-            weights_df = pd.DataFrame({
-                'Stock': stocks,
-                'Sector': sectors,
-                'Weight': portfolio_data['optimal']['weights'] * 100
-            })
-            fig = px.pie(weights_df, values='Weight', names='Sector', title='Optimized Portfolio Sector Allocation',
-                         color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#FFD93D', '#1A936F', '#C06C84'])
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Sector Allocation chart: {e}")
+        st.subheader("Weights (Min Volatility Portfolio)")
+        weights_df = pd.DataFrame({
+            'Stock': stocks,
+            'Weight': min_vol_portfolio['weights'] * 100
+        })
+        fig = px.pie(weights_df, values='Weight', names='Stock', title='Min Volatility Portfolio Weights',
+                     color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#FFD93D', '#1A936F', '#C06C84'])
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.subheader("Return and Risk Comparison")
-        try:
-            stats_df = pd.DataFrame({
-                'Portfolio': ['Initial (Equal)', 'Optimized'],
-                'Return (%)': [portfolio_data['equal']['return'], portfolio_data['optimal']['return']],
-                'Risk (%)': [portfolio_data['equal']['risk'], portfolio_data['optimal']['risk']]
-            })
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Return (%)'], name='Return (%)',
-                                 marker_color='#FF6B6B'))
-            fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Risk (%)'], name='Risk (%)',
-                                 marker_color='#4ECDC4'))
-            fig.update_layout(barmode='group', title="Return and Risk Comparison", template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Return and Risk Comparison chart: {e}")
+        st.subheader("Weights (Max Sharpe Portfolio)")
+        weights_df = pd.DataFrame({
+            'Stock': stocks,
+            'Weight': max_sharpe_portfolio['weights'] * 100
+        })
+        fig = px.pie(weights_df, values='Weight', names='Stock', title='Max Sharpe Portfolio Weights',
+                     color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#FFD93D', '#1A936F', '#C06C84'])
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Sharpe Ratio Comparison")
-        try:
-            sharpe_df = pd.DataFrame({
-                'Portfolio': ['Initial (Equal)', 'Optimized'],
-                'Sharpe Ratio': [portfolio_data['equal']['sharpe'], portfolio_data['optimal']['sharpe']]
-            })
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=sharpe_df['Portfolio'], y=sharpe_df['Sharpe Ratio'], name='Sharpe Ratio',
-                                 marker_color='#FFD93D'))
-            fig.update_layout(title="Sharpe Ratio Comparison", template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Sharpe Ratio Comparison chart: {e}")
-
-    with col2:
-        st.subheader("Risk vs. Return")
-        try:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=[portfolio_data['equal']['risk']], y=[portfolio_data['equal']['return']],
-                mode='markers+text', name='Initial (Equal)', marker=dict(size=15, color='#C06C84', symbol='circle'),
-                text=['Initial'], textposition='top center'
-            ))
-            fig.add_trace(go.Scatter(
-                x=[portfolio_data['optimal']['risk']], y=[portfolio_data['optimal']['return']],
-                mode='markers+text', name='Optimized', marker=dict(size=15, color='#F28C38', symbol='star'),
-                text=['Optimized'], textposition='top center'
-            ))
-            fig.add_hline(y=risk_free_rate, line_dash="dash", line_color="black",
-                          annotation_text=f"T-Bill ({risk_free_rate}%)", annotation_position="bottom right")
-            fig.update_layout(
-                title="Risk vs. Return",
-                xaxis_title="Annualized Risk (%)",
-                yaxis_title="Annualized Return (%)",
-                template="plotly_white"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering Risk vs. Return chart: {e}")
+    st.subheader("Performance Metrics")
+    stats_df = pd.DataFrame({
+        'Portfolio': ['Min Volatility', 'Max Sharpe'],
+        'Annual Return (%)': [min_vol_portfolio['return'], max_sharpe_portfolio['return']],
+        'Annual Risk (%)': [min_vol_portfolio['risk'], max_sharpe_portfolio['risk']],
+        'Sharpe Ratio': [min_vol_portfolio['sharpe'], max_sharpe_portfolio['sharpe']]
+    })
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Annual Return (%)'], name='Annual Return (%)',
+                         marker_color='#FF6B6B'))
+    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Annual Risk (%)'], name='Annual Risk (%)',
+                         marker_color='#4ECDC4'))
+    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Sharpe Ratio'], name='Sharpe Ratio',
+                         marker_color='#FFD93D'))
+    fig.update_layout(barmode='group', title="Performance Comparison", template="plotly_white")
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Cumulative Returns")
-    try:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Equal'],
-                                 mode='lines', name='Initial (Equal)', line=dict(color='#FFD93D')))
-        fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Optimal'],
-                                 mode='lines', name='Optimized', line=dict(color='#1A936F')))
-        fig.update_layout(title="Cumulative Returns", xaxis_title="Date", yaxis_title="Cumulative Growth (%)",
-                          template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Error rendering Cumulative Returns chart: {e}")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Min Volatility'] * 100,
+                             mode='lines', name='Min Volatility', line=dict(color='#FFD93D')))
+    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Max Sharpe'] * 100,
+                             mode='lines', name='Max Sharpe', line=dict(color='#1A936F')))
+    fig.update_layout(title="Cumulative Returns", xaxis_title="Date", yaxis_title="Cumulative Return (%)",
+                      template="plotly_white")
+    st.plotly_chart(fig, use_container_width=True)

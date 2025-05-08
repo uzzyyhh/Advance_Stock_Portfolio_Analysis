@@ -17,6 +17,12 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 
 # Sidebar for portfolio settings
 st.sidebar.header("Portfolio Settings")
+risk_free_rate = st.sidebar.slider("Risk-Free Rate (%)", 5.0, 15.0, 12.01, step=0.01)
+st.sidebar.markdown(
+    """
+    **Optimization Method**: Mean-variance optimization maximizing the Sharpe Ratio, with constraints for full allocation and non-negative weights (no short-selling).
+    """
+)
 st.sidebar.markdown(
     """
     <div style="display: flex; justify-content: center;">
@@ -58,9 +64,8 @@ mean_returns, cov_matrix, std_devs = calculate_stats(returns)
 
 # Portfolio optimization using mean-variance optimization
 @st.cache_data
-def optimize_portfolio(mean_returns, cov_matrix):
+def optimize_portfolio(mean_returns, cov_matrix, risk_free_rate):
     num_stocks = len(stocks)
-    risk_free_rate = 12.01  # Annualized, as per report (%)
 
     # Objective function: Negative Sharpe Ratio (to maximize)
     def neg_sharpe_ratio(weights, mean_returns, cov_matrix, risk_free_rate):
@@ -101,13 +106,13 @@ def optimize_portfolio(mean_returns, cov_matrix):
         'equal': {'weights': equal_weights, 'return': equal_return, 'risk': equal_risk, 'sharpe': equal_sharpe}
     }
 
-portfolio_data = optimize_portfolio(mean_returns, cov_matrix)
+portfolio_data = optimize_portfolio(mean_returns, cov_matrix, risk_free_rate)
 
-# Calculate cumulative returns
+# Calculate cumulative returns (scaled to annualized perspective)
 cumulative_returns = pd.DataFrame({
     'Date': returns['Date'],
-    'Equal': (returns[stocks].mean(axis=1) + 1).cumprod() - 1,
-    'Optimal': (returns[stocks].mul(portfolio_data['optimal']['weights'], axis=1).sum(axis=1) + 1).cumprod() - 1
+    'Equal': (returns[stocks].mean(axis=1) + 1).cumprod() * 100,
+    'Optimal': (returns[stocks].mul(portfolio_data['optimal']['weights'], axis=1).sum(axis=1) + 1).cumprod() * 100
 })
 
 # Page: Price Trends
@@ -173,48 +178,63 @@ if page == "Portfolio":
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.subheader("Performance Metrics")
+        st.subheader("Return and Risk Comparison")
         stats_df = pd.DataFrame({
             'Portfolio': ['Initial (Equal)', 'Optimized'],
             'Return (%)': [portfolio_data['equal']['return'], portfolio_data['optimal']['return']],
-            'Risk (%)': [portfolio_data['equal']['risk'], portfolio_data['optimal']['risk']],
-            'Sharpe Ratio': [portfolio_data['equal']['sharpe'], portfolio_data['optimal']['sharpe']]
+            'Risk (%)': [portfolio_data['equal']['risk'], portfolio_data['optimal']['risk']]
         })
         fig = go.Figure()
         fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Return (%)'], name='Return (%)',
                              marker_color='#FF6B6B'))
         fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Risk (%)'], name='Risk (%)',
                              marker_color='#4ECDC4'))
-        fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Sharpe Ratio'], name='Sharpe Ratio',
-                             marker_color='#FFD93D'))
-        fig.update_layout(barmode='group', title="Performance Comparison", template="plotly_white")
+        fig.update_layout(barmode='group', title="Return and Risk Comparison", template="plotly_white")
         st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Risk vs. Return")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=[portfolio_data['equal']['risk']], y=[portfolio_data['equal']['return']],
-        mode='markers', name='Initial (Equal)', marker=dict(size=12, color='#C06C84', symbol='circle')
-    ))
-    fig.add_trace(go.Scatter(
-        x=[portfolio_data['optimal']['risk']], y=[portfolio_data['optimal']['return']],
-        mode='markers', name='Optimized', marker=dict(size=12, color='#F28C38', symbol='star')
-    ))
-    fig.add_hline(y=12.01, line_dash="dash", line_color="black", annotation_text="T-Bill (12.01%)")
-    fig.update_layout(
-        title="Risk vs. Return",
-        xaxis_title="Annualized Risk (%)",
-        yaxis_title="Annualized Return (%)",
-        template="plotly_white"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Sharpe Ratio Comparison")
+        sharpe_df = pd.DataFrame({
+            'Portfolio': ['Initial (Equal)', 'Optimized'],
+            'Sharpe Ratio': [portfolio_data['equal']['sharpe'], portfolio_data['optimal']['sharpe']]
+        })
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=sharpe_df['Portfolio'], y=sharpe_df['Sharpe Ratio'], name='Sharpe Ratio',
+                             marker_color='#FFD93D'))
+        fig.update_layout(title="Sharpe Ratio Comparison", template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.subheader("Risk vs. Return")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=[portfolio_data['equal']['risk']], y=[portfolio_data['equal']['return']],
+            mode='markers+text', name='Initial (Equal)', marker=dict(size=15, color='#C06C84', symbol='circle'),
+            text=['Initial'], textposition='top center'
+        ))
+        fig.add_trace(go.Scatter(
+            x=[portfolio_data['optimal']['risk']], y=[portfolio_data['optimal']['return']],
+            mode='markers+text', name='Optimized', marker=dict(size=15, color='#F28C38', symbol='star'),
+            text=['Optimized'], textposition='top center'
+        ))
+        fig.add_hline(y=risk_free_rate, line_dash="dash", line_color="black",
+                      annotation_text=f"T-Bill ({risk_free_rate}%)", annotation_position="bottom right")
+        fig.update_layout(
+            title="Risk vs. Return",
+            xaxis_title="Annualized Risk (%)",
+            yaxis_title="Annualized Return (%)",
+            template="plotly_white"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Cumulative Returns")
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Equal'] * 100,
+    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Equal'],
                              mode='lines', name='Initial (Equal)', line=dict(color='#FFD93D')))
-    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Optimal'] * 100,
+    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Optimal'],
                              mode='lines', name='Optimized', line=dict(color='#1A936F')))
-    fig.update_layout(title="Cumulative Returns", xaxis_title="Date", yaxis_title="Cumulative Return (%)",
+    fig.update_layout(title="Cumulative Returns", xaxis_title="Date", yaxis_title="Cumulative Growth (%)",
                       template="plotly_white")
     st.plotly_chart(fig, use_container_width=True)

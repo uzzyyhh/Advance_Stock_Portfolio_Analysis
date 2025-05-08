@@ -4,27 +4,79 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+# Define a consistent color palette
+COLOR_PALETTE = {
+    'primary': '#FF6B6B',    # Coral for main elements
+    'secondary': '#4ECDC4',  # Teal for secondary elements
+    'accent': '#FFD93D',     # Yellow for highlights
+    'success': '#1A936F',    # Green for positive metrics
+    'neutral': '#C06C84',    # Mauve for neutral elements
+    'text': '#333333',       # Dark gray for text
+    'background': '#F5F5F5'  # Light gray background
+}
+
 # Streamlit page configuration
 st.set_page_config(page_title="Stock Portfolio Analysis", layout="wide")
 
-# Title
-st.title("Stock Portfolio Analysis")
-
-# Sidebar for navigation
-st.sidebar.header("Navigation")
-page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation", "Efficient Frontier", "Portfolio"])
-
-# Sidebar for portfolio settings
-st.sidebar.header("Portfolio Settings")
-num_portfolios = st.sidebar.slider("Number of Portfolios to Simulate", 1000, 10000, 5000, step=1000)
-st.sidebar.markdown(
+# Custom CSS for styling
+st.markdown(
     """
-    <div style="display: flex; justify-content: center;">
-        <img src="https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif" style="width:100%; max-width:100%; height:auto;">
-    </div>
+    <style>
+    .main { background-color: #F5F5F5; }
+    .stSidebar { background-color: #E8F0FE; }
+    .sidebar .sidebar-content { padding: 20px; }
+    h1 { color: #FF6B6B; font-family: 'Arial', sans-serif; }
+    h2 { color: #4ECDC4; font-family: 'Arial', sans-serif; }
+    h3 { color: #333333; font-family: 'Arial', sans-serif; }
+    .stButton>button { background-color: #FF6B6B; color: white; }
+    .stRadio>div>label { color: #333333; font-weight: bold; }
+    </style>
     """,
     unsafe_allow_html=True
 )
+
+# Title with styled header
+st.markdown(
+    f"""
+    <h1 style='text-align: center; color: {COLOR_PALETTE["primary"]}'>📈 Stock Portfolio Analysis</h1>
+    <p style='text-align: center; color: {COLOR_PALETTE["text"]};'>
+        Explore stock price trends, returns, correlations, and portfolio optimization.
+    </p>
+    """,
+    unsafe_allow_html=True
+)
+
+# Sidebar for navigation
+st.sidebar.markdown(
+    f"""
+    <h2 style='color: {COLOR_PALETTE["secondary"]}'>Navigation</h2>
+    """,
+    unsafe_allow_html=True
+)
+page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation", "Efficient Frontier", "Portfolio"])
+
+# Sidebar for portfolio settings
+st.sidebar.markdown(
+    f"""
+    <h2 style='color: {COLOR_PALETTE["secondary"]}'>Portfolio Settings</h2>
+    """,
+    unsafe_allow_html=True
+)
+num_portfolios = st.sidebar.slider(
+    "Number of Portfolios to Simulate", 1000, 10000, 5000, step=1000,
+    help="Adjust the number of portfolios to simulate for optimization."
+)
+st.sidebar.markdown(
+    f"""
+    <div style='display: flex; justify-content: center;'>
+        <img src='https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif' style='width:100%; max-width:100%; height:auto;'>
+    </div>
+    <p style='text-align: center; color: {COLOR_PALETTE["text"]}'>Analyzing your portfolio...</p>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Data Loading and Preprocessing ---
 
 # Load data
 @st.cache_data
@@ -53,7 +105,11 @@ def calculate_stats(returns):
 
 mean_returns, cov_matrix = calculate_stats(returns)
 
-# Monte Carlo simulation for portfolio optimization
+# Calculate annualized returns for individual stocks
+annualized_returns = mean_returns * 252 * 100  # Annualized return (%)
+
+# --- Monte Carlo Simulation ---
+
 @st.cache_data
 def monte_carlo_simulation(mean_returns, cov_matrix, num_portfolios):
     num_stocks = len(stocks)
@@ -96,81 +152,172 @@ min_vol_portfolio = {
     'weights': results[3:, min_vol_idx]
 }
 
-# Calculate cumulative returns
+# Calculate cumulative returns for portfolios
 cumulative_returns = pd.DataFrame({
     'Date': returns['Date'],
     'Min Volatility': (returns[stocks].mul(min_vol_portfolio['weights'], axis=1).sum(axis=1) + 1).cumprod() - 1,
     'Max Sharpe': (returns[stocks].mul(max_sharpe_portfolio['weights'], axis=1).sum(axis=1) + 1).cumprod() - 1
 })
 
-# Calculate annualized returns for individual stocks
-annualized_returns = mean_returns * 252 * 100  # Annualized return (%)
+# --- Page: Price Trends ---
 
-# Page: Price Trends
 if page == "Price Trends":
-    st.header("Stock Price Trends")
-    selected_stock = st.selectbox("Select Stock", stocks)
-    fig = px.line(data, x='Date', y=selected_stock, title=f'{selected_stock} Price Trend',
-                  color_discrete_sequence=['#FF6B6B'])
-    fig.update_layout(xaxis_title="Date", yaxis_title="Price", template="plotly_white")
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(f"<h2>Stock Price Trends 📊</h2>", unsafe_allow_html=True)
+    selected_stock = st.selectbox("Select Stock", stocks, key="price_trends_select")
+    
+    with st.container():
+        fig = px.line(
+            data, 
+            x='Date', 
+            y=selected_stock, 
+            title=f'{selected_stock} Price Trend Over Time',
+            color_discrete_sequence=[COLOR_PALETTE['primary']]
+        )
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Price (PKR)",
+            template="plotly_white",
+            title_font=dict(size=20, color=COLOR_PALETTE['text']),
+            font=dict(size=14, color=COLOR_PALETTE['text']),
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-# Page: Returns
+# --- Page: Returns ---
+
 if page == "Returns":
-    st.header("Stock Returns")
-    selected_stock = st.selectbox("Select Stock", stocks)
+    st.markdown(f"<h2>Stock Returns Analysis 📉</h2>", unsafe_allow_html=True)
+    selected_stock = st.selectbox("Select Stock", stocks, key="returns_select")
     
     # Option to select return type
-    return_type = st.radio("Select Return Type", ["Daily Returns", "Annualized Returns", "Cumulative Returns"])
+    return_type = st.radio(
+        "Select Return Type", 
+        ["Daily Returns", "Annualized Returns", "Cumulative Returns"],
+        help="Choose how to view the returns: daily, annualized, or cumulative over time."
+    )
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader(f"{return_type} Over Time")
+        st.markdown(f"<h3>{return_type} Over Time</h3>", unsafe_allow_html=True)
         if return_type == "Daily Returns":
-            fig = px.line(returns, x='Date', y=selected_stock, title=f'{selected_stock} Daily Returns',
-                          color_discrete_sequence=['#4ECDC4'])
-            fig.update_layout(xaxis_title="Date", yaxis_title="Daily Return", template="plotly_white")
+            fig = px.line(
+                returns, 
+                x='Date', 
+                y=selected_stock, 
+                title=f'{selected_stock} Daily Returns',
+                color_discrete_sequence=[COLOR_PALETTE['secondary']]
+            )
+            fig.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Daily Return",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                hovermode='x unified'
+            )
         elif return_type == "Annualized Returns":
             annualized_df = pd.DataFrame({
                 'Date': returns['Date'],
                 selected_stock: returns[selected_stock] * 252  # Scale daily returns to annualized
             })
-            fig = px.line(annualized_df, x='Date', y=selected_stock, title=f'{selected_stock} Annualized Returns (Scaled Daily)',
-                          color_discrete_sequence=['#4ECDC4'])
-            fig.update_layout(xaxis_title="Date", yaxis_title="Annualized Return", template="plotly_white")
+            fig = px.line(
+                annualized_df, 
+                x='Date', 
+                y=selected_stock, 
+                title=f'{selected_stock} Annualized Returns (Scaled Daily)',
+                color_discrete_sequence=[COLOR_PALETTE['secondary']]
+            )
+            fig.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Annualized Return",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                hovermode='x unified'
+            )
         else:  # Cumulative Returns
             cumulative_stock = (returns[selected_stock] + 1).cumprod() - 1
             cumulative_df = pd.DataFrame({
                 'Date': returns['Date'],
                 selected_stock: cumulative_stock * 100
             })
-            fig = px.line(cumulative_df, x='Date', y=selected_stock, title=f'{selected_stock} Cumulative Returns',
-                          color_discrete_sequence=['#4ECDC4'])
-            fig.update_layout(xaxis_title="Date", yaxis_title="Cumulative Return (%)", template="plotly_white")
+            fig = px.line(
+                cumulative_df, 
+                x='Date', 
+                y=selected_stock, 
+                title=f'{selected_stock} Cumulative Returns',
+                color_discrete_sequence=[COLOR_PALETTE['secondary']]
+            )
+            fig.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Cumulative Return (%)",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                hovermode='x unified'
+            )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.subheader(f"{return_type} Distribution")
+        st.markdown(f"<h3>{return_type} Distribution</h3>", unsafe_allow_html=True)
         if return_type == "Daily Returns":
-            fig = px.histogram(returns, x=selected_stock, nbins=50, title=f'{selected_stock} Daily Returns Distribution',
-                               color_discrete_sequence=['#FFD93D'])
-            fig.update_layout(xaxis_title="Daily Return", yaxis_title="Count", template="plotly_white")
+            fig = px.histogram(
+                returns, 
+                x=selected_stock, 
+                nbins=50, 
+                title=f'{selected_stock} Daily Returns Distribution',
+                color_discrete_sequence=[COLOR_PALETTE['accent']]
+            )
+            fig.update_layout(
+                xaxis_title="Daily Return",
+                yaxis_title="Count",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                bargap=0.1
+            )
         elif return_type == "Annualized Returns":
-            fig = px.histogram(returns, x=selected_stock, nbins=50, title=f'{selected_stock} Annualized Returns Distribution (Scaled Daily)',
-                               color_discrete_sequence=['#FFD93D'])
-            fig.update_layout(xaxis_title="Annualized Return", yaxis_title="Count", template="plotly_white")
+            annualized_df = pd.DataFrame({selected_stock: returns[selected_stock] * 252})
+            fig = px.histogram(
+                annualized_df, 
+                x=selected_stock, 
+                nbins=50, 
+                title=f'{selected_stock} Annualized Returns Distribution (Scaled Daily)',
+                color_discrete_sequence=[COLOR_PALETTE['accent']]
+            )
+            fig.update_layout(
+                xaxis_title="Annualized Return",
+                yaxis_title="Count",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                bargap=0.1
+            )
         else:  # Cumulative Returns
             cumulative_stock = (returns[selected_stock] + 1).cumprod() - 1
             cumulative_df = pd.DataFrame({selected_stock: cumulative_stock * 100})
-            fig = px.histogram(cumulative_df, x=selected_stock, nbins=50, title=f'{selected_stock} Cumulative Returns Distribution',
-                               color_discrete_sequence=['#FFD93D'])
-            fig.update_layout(xaxis_title="Cumulative Return (%)", yaxis_title="Count", template="plotly_white")
+            fig = px.histogram(
+                cumulative_df, 
+                x=selected_stock, 
+                nbins=50, 
+                title=f'{selected_stock} Cumulative Returns Distribution',
+                color_discrete_sequence=[COLOR_PALETTE['accent']]
+            )
+            fig.update_layout(
+                xaxis_title="Cumulative Return (%)",
+                yaxis_title="Count",
+                template="plotly_white",
+                title_font=dict(size=18, color=COLOR_PALETTE['text']),
+                font=dict(size=14, color=COLOR_PALETTE['text']),
+                bargap=0.1
+            )
         st.plotly_chart(fig, use_container_width=True)
 
-# Page: Correlation
+# --- Page: Correlation ---
+
 if page == "Correlation":
-    st.header("Correlation Matrix")
+    st.markdown(f"<h2>Correlation Matrix 🔗</h2>", unsafe_allow_html=True)
     corr_matrix = returns[stocks].corr()
     fig = go.Figure(data=go.Heatmap(
         z=corr_matrix.values,
@@ -181,14 +328,22 @@ if page == "Correlation":
         zmax=1,
         text=corr_matrix.values.round(2),
         texttemplate="%{text}",
-        textfont={"size": 12, "color": "white"}
+        textfont={"size": 12, "color": "white"},
+        hoverinfo='z'
     ))
-    fig.update_layout(title="Correlation Matrix", template="plotly_white")
+    fig.update_layout(
+        title="Correlation Matrix of Stocks",
+        template="plotly_white",
+        title_font=dict(size=20, color=COLOR_PALETTE['text']),
+        font=dict(size=14, color=COLOR_PALETTE['text']),
+        height=500
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-# Page: Efficient Frontier
+# --- Page: Efficient Frontier ---
+
 if page == "Efficient Frontier":
-    st.header("Efficient Frontier")
+    st.markdown(f"<h2>Efficient Frontier 🌟</h2>", unsafe_allow_html=True)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=results[1] * 100,
@@ -201,58 +356,106 @@ if page == "Efficient Frontier":
             showscale=True,
             colorbar=dict(title="Sharpe Ratio")
         ),
-        name='Portfolios'
+        name='Portfolios',
+        hovertemplate='Return: %{y:.2f}%<br>Risk: %{x:.2f}%<br>Sharpe: %{marker.color:.2f}'
     ))
     fig.add_trace(go.Scatter(
         x=[min_vol_portfolio['risk']],
         y=[min_vol_portfolio['return']],
         mode='markers',
-        marker=dict(size=12, color='red', symbol='star'),
-        name='Min Volatility'
+        marker=dict(size=12, color=COLOR_PALETTE['neutral'], symbol='star'),
+        name='Min Volatility',
+        hovertemplate='Min Volatility<br>Return: %{y:.2f}%<br>Risk: %{x:.2f}%'
     ))
     fig.add_trace(go.Scatter(
         x=[max_sharpe_portfolio['risk']],
         y=[max_sharpe_portfolio['return']],
         mode='markers',
-        marker=dict(size=12, color='green', symbol='star'),
-        name='Max Sharpe'
+        marker=dict(size=12, color=COLOR_PALETTE['success'], symbol='star'),
+        name='Max Sharpe',
+        hovertemplate='Max Sharpe<br>Return: %{y:.2f}%<br>Risk: %{x:.2f}%'
     ))
     fig.update_layout(
-        title="Efficient Frontier",
-        xaxis_title="Risk (%)",
-        yaxis_title="Return (%)",
-        template="plotly_white"
+        title="Efficient Frontier with Optimal Portfolios",
+        xaxis_title="Annualized Risk (%)",
+        yaxis_title="Annualized Return (%)",
+        template="plotly_white",
+        title_font=dict(size=20, color=COLOR_PALETTE['text']),
+        font=dict(size=14, color=COLOR_PALETTE['text']),
+        hovermode='closest',
+        height=500
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Page: Portfolio
+# --- Page: Portfolio ---
+
 if page == "Portfolio":
-    st.header("Portfolio Analysis")
+    st.markdown(f"<h2>Portfolio Analysis 💼</h2>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Weights (Min Volatility Portfolio)")
+        st.markdown(f"<h3>Weights (Min Volatility Portfolio)</h3>", unsafe_allow_html=True)
         weights_df = pd.DataFrame({
             'Stock': stocks,
             'Weight': min_vol_portfolio['weights'] * 100
         })
-        fig = px.pie(weights_df, values='Weight', names='Stock', title='Min Volatility Portfolio Weights',
-                     color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#FFD93D', '#1A936F', '#C06C84'])
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig = px.pie(
+            weights_df, 
+            values='Weight', 
+            names='Stock', 
+            title='Min Volatility Portfolio Weights',
+            color_discrete_sequence=[
+                COLOR_PALETTE['primary'], 
+                COLOR_PALETTE['secondary'], 
+                COLOR_PALETTE['accent'], 
+                COLOR_PALETTE['success'], 
+                COLOR_PALETTE['neutral']
+            ]
+        )
+        fig.update_traces(
+            textposition='inside', 
+            textinfo='percent+label',
+            hovertemplate='%{label}: %{value:.2f}%'
+        )
+        fig.update_layout(
+            title_font=dict(size=18, color=COLOR_PALETTE['text']),
+            font=dict(size=14, color=COLOR_PALETTE['text']),
+            height=400
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.subheader("Weights (Max Sharpe Portfolio)")
+        st.markdown(f"<h3>Weights (Max Sharpe Portfolio)</h3>", unsafe_allow_html=True)
         weights_df = pd.DataFrame({
             'Stock': stocks,
             'Weight': max_sharpe_portfolio['weights'] * 100
         })
-        fig = px.pie(weights_df, values='Weight', names='Stock', title='Max Sharpe Portfolio Weights',
-                     color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#FFD93D', '#1A936F', '#C06C84'])
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig = px.pie(
+            weights_df, 
+            values='Weight', 
+            names='Stock', 
+            title='Max Sharpe Portfolio Weights',
+            color_discrete_sequence=[
+                COLOR_PALETTE['primary'], 
+                COLOR_PALETTE['secondary'], 
+                COLOR_PALETTE['accent'], 
+                COLOR_PALETTE['success'], 
+                COLOR_PALETTE['neutral']
+            ]
+        )
+        fig.update_traces(
+            textposition='inside', 
+            textinfo='percent+label',
+            hovertemplate='%{label}: %{value:.2f}%'
+        )
+        fig.update_layout(
+            title_font=dict(size=18, color=COLOR_PALETTE['text']),
+            font=dict(size=14, color=COLOR_PALETTE['text']),
+            height=400
+        )
         st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Performance Metrics")
+    st.markdown(f"<h3>Performance Metrics</h3>", unsafe_allow_html=True)
     stats_df = pd.DataFrame({
         'Portfolio': ['Min Volatility', 'Max Sharpe'],
         'Annual Return (%)': [min_vol_portfolio['return'], max_sharpe_portfolio['return']],
@@ -260,21 +463,65 @@ if page == "Portfolio":
         'Sharpe Ratio': [min_vol_portfolio['sharpe'], max_sharpe_portfolio['sharpe']]
     })
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Annual Return (%)'], name='Annual Return (%)',
-                         marker_color='#FF6B6B'))
-    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Annual Risk (%)'], name='Annual Risk (%)',
-                         marker_color='#4ECDC4'))
-    fig.add_trace(go.Bar(x=stats_df['Portfolio'], y=stats_df['Sharpe Ratio'], name='Sharpe Ratio',
-                         marker_color='#FFD93D'))
-    fig.update_layout(barmode='group', title="Performance Comparison", template="plotly_white")
+    fig.add_trace(go.Bar(
+        x=stats_df['Portfolio'], 
+        y=stats_df['Annual Return (%)'], 
+        name='Annual Return (%)',
+        marker_color=COLOR_PALETTE['primary'],
+        hovertemplate='%{y:.2f}%'
+    ))
+    fig.add_trace(go.Bar(
+        x=stats_df['Portfolio'], 
+        y=stats_df['Annual Risk (%)'], 
+        name='Annual Risk (%)',
+        marker_color=COLOR_PALETTE['secondary'],
+        hovertemplate='%{y:.2f}%'
+    ))
+    fig.add_trace(go.Bar(
+        x=stats_df['Portfolio'], 
+        y=stats_df['Sharpe Ratio'], 
+        name='Sharpe Ratio',
+        marker_color=COLOR_PALETTE['accent'],
+        hovertemplate='%{y:.2f}'
+    ))
+    fig.update_layout(
+        barmode='group',
+        title="Performance Comparison of Portfolios",
+        template="plotly_white",
+        title_font=dict(size=18, color=COLOR_PALETTE['text']),
+        font=dict(size=14, color=COLOR_PALETTE['text']),
+        height=400,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Cumulative Returns")
+    st.markdown(f"<h3>Cumulative Returns</h3>", unsafe_allow_html=True)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Min Volatility'] * 100,
-                             mode='lines', name='Min Volatility', line=dict(color='#FFD93D')))
-    fig.add_trace(go.Scatter(x=cumulative_returns['Date'], y=cumulative_returns['Max Sharpe'] * 100,
-                             mode='lines', name='Max Sharpe', line=dict(color='#1A936F')))
-    fig.update_layout(title="Cumulative Returns", xaxis_title="Date", yaxis_title="Cumulative Return (%)",
-                      template="plotly_white")
+    fig.add_trace(go.Scatter(
+        x=cumulative_returns['Date'], 
+        y=cumulative_returns['Min Volatility'] * 100,
+        mode='lines', 
+        name='Min Volatility', 
+        line=dict(color=COLOR_PALETTE['neutral']),
+        hovertemplate='Min Volatility: %{y:.2f}%'
+    ))
+    fig.add_trace(go.Scatter(
+        x=cumulative_returns['Date'], 
+        y=cumulative_returns['Max Sharpe'] * 100,
+        mode='lines', 
+        name='Max Sharpe', 
+        line=dict(color=COLOR_PALETTE['success']),
+        hovertemplate='Max Sharpe: %{y:.2f}%'
+    ))
+    fig.update_layout(
+        title="Cumulative Returns Over Time",
+        xaxis_title="Date",
+        yaxis_title="Cumulative Return (%)",
+        template="plotly_white",
+        title_font=dict(size=18, color=COLOR_PALETTE['text']),
+        font=dict(size=14, color=COLOR_PALETTE['text']),
+        hovermode='x unified',
+        height=400,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
     st.plotly_chart(fig, use_container_width=True)

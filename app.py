@@ -3,11 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import seaborn as sns
-import matplotlib.pyplot as plt
-from datetime import datetime
-import uuid
 
 # Streamlit page configuration
 st.set_page_config(page_title="Stock Portfolio Analysis", layout="wide")
@@ -23,8 +18,6 @@ page = st.sidebar.radio("Select Page", ["Price Trends", "Returns", "Correlation"
 st.sidebar.header("Portfolio Settings")
 num_portfolios = st.sidebar.slider("Number of Simulated Portfolios", 500, 5000, 1000, step=500)
 
-gif_url = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDFkZTBuNDN5OTdjdTQ5dXdtYW95cHljdmc0bDU5dTV6cWFvYjN0bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4qbCWW4WwDpoYtzj6S/giphy.gif" 
-
 st.sidebar.markdown(
     f"""
     <div style="display: flex; justify-content: center;">
@@ -33,6 +26,7 @@ st.sidebar.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # Load data
 @st.cache_data
 def load_data():

@@ -216,4 +216,3 @@ if page == "Portfolio":
         template="plotly_white"
     )
     st.plotly_chart(fig, use_container_width=True)
-```
